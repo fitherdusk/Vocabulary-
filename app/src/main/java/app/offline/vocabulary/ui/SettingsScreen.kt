@@ -77,6 +77,8 @@ fun SettingsScreen(
             SettingsGroup("Встроенный словарь") {
                 SettingRow("О переводах и произношении", "Частотный сербский") { dialog = SettingDialog.SOURCES }
             }
+            Text("made by ai", Modifier.align(Alignment.CenterHorizontally),
+                color = Quiet, style = MaterialTheme.typography.bodySmall)
         }
     }
     val close = { dialog = null }

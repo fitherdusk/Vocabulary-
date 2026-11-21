@@ -165,6 +165,7 @@ class MainActivitySmokeTest {
         compose.onNodeWithContentDescription("Назад").performClick()
         compose.onNodeWithText("Настройки").performClick()
 
+        compose.onNodeWithText("made by ai").performScrollTo().assertIsDisplayed()
         val context = compose.activity.applicationContext
         val backup = File(context.cacheDir, "roundtrip.json")
         compose.onNodeWithText("Сохранить резервную копию").performScrollTo().performClick()
