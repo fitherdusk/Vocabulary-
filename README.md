@@ -4,7 +4,7 @@ made by ai
 
 Нативное Android-приложение для изучения слов по карточкам и интервальным повторениям. Минимальная версия системы — Android 8.0 (API 26). Целевая версия — Android 15 (API 35). Интерфейс на русском языке.
 
-[Скачать последнюю версию APK](https://github.com/fitherdusk/Vocabulary-/releases/latest/download/OfflineVocabulary.apk) · [История версий](https://github.com/fitherdusk/Vocabulary-/releases)
+[Скачать последнюю версию APK](https://raw.githubusercontent.com/fitherdusk/Vocabulary-/HEAD/downloads/OfflineVocabulary.apk) · [История версий](https://github.com/fitherdusk/Vocabulary-/releases)
 
 ## Первый запуск
 
