@@ -1,5 +1,7 @@
 package app.offline.vocabulary.importer
 
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.Writer
@@ -29,9 +31,7 @@ internal class ImportMemory {
         override fun read(bytes: ByteArray, offset: Int, length: Int): Int = account(super.read(bytes, offset, length))
     }
 
-    fun tooLarge(): Nothing = throw IllegalArgumentException(
-        "Файл слишком велик для доступной памяти. Разделите словарь на несколько файлов."
-    )
+    fun tooLarge(): Nothing = throw VocabularyProblem(R.string.error_file_size)
 }
 
 internal class PdfTextOutput(private val memory: ImportMemory) : Writer() {

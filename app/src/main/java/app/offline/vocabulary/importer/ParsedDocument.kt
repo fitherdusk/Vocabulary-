@@ -1,5 +1,8 @@
 package app.offline.vocabulary.importer
 
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
+import app.offline.vocabulary.requireInput
 import java.text.Normalizer
 import java.util.Locale
 
@@ -33,8 +36,9 @@ class ParsedDocument private constructor(
     } else sourceRows
 
     private val width = maxOf(namedHeader?.size ?: 0, sourceRows.maxOfOrNull { it.size } ?: 0)
+    fun headerName(index: Int): String? = namedHeader?.getOrNull(index)?.trim()?.takeIf(String::isNotEmpty)
     val headers: List<String> = List(width) {
-        namedHeader?.getOrNull(it)?.trim()?.takeIf(String::isNotEmpty) ?: "Столбец ${it + 1}"
+        headerName(it).orEmpty()
     }
     val suggested: Mapping = suggestMapping()
 
@@ -42,12 +46,12 @@ class ParsedDocument private constructor(
         if (!canChangeHeader || this.firstRowIsHeader == firstRowIsHeader) this
         else ParsedDocument(sourceRows, null, firstRowIsHeader)
 
-    fun prepare(mapping: Mapping): ImportResult {
-        require(mapping.word in headers.indices) { "Выберите столбец со словом." }
+    fun prepare(mapping: Mapping, unnamedColumn: (Int) -> String = { "Column ${it + 1}" }): ImportResult {
+        requireInput(mapping.word in headers.indices, R.string.error_select_word)
         val selected = listOf(mapping.word, mapping.translation, mapping.transcription, mapping.example)
-        require(selected.all { it == -1 || it in headers.indices }) { "Выбран несуществующий столбец." }
+        requireInput(selected.all { it == -1 || it in headers.indices }, R.string.error_invalid_column)
         val used = selected.filter { it >= 0 }.toSet()
-        require(used.size == selected.count { it >= 0 }) { "Для каждого поля выберите отдельный столбец." }
+        requireInput(used.size == selected.count { it >= 0 }, R.string.error_distinct_columns)
 
         val seen = HashSet<Pair<String, String>>()
         val entries = ArrayList<Entry>()
@@ -62,7 +66,7 @@ class ParsedDocument private constructor(
                 !seen.add(normalized(word) to normalized(translation)) -> duplicates++
                 else -> {
                     val extra = row.indices.filter { it !in used && row[it].isNotBlank() }
-                        .joinToString("\n") { "${headers[it]}: ${value(it)}" }
+                        .joinToString("\n") { "${headerName(it) ?: unnamedColumn(it)}: ${value(it)}" }
                     entries.add(Entry(word, translation, value(mapping.transcription), value(mapping.example), extra))
                 }
             }
@@ -87,14 +91,14 @@ class ParsedDocument private constructor(
     companion object {
         internal fun table(rows: List<List<String>>, headerHint: Boolean? = null): ParsedDocument {
             val first = rows.firstOrNull { row -> row.any(String::isNotBlank) }
-            require(first != null) { "В файле нет записей для импорта." }
+                ?: throw VocabularyProblem(R.string.error_no_records)
             val knownFields = first.map(::role)
             val hasHeader = headerHint ?: (knownFields.count { it != null } >= 2 || knownFields.firstOrNull() == "word")
             return ParsedDocument(rows, null, hasHeader)
         }
 
         internal fun objects(keys: List<String>, rows: List<List<String>>): ParsedDocument {
-            require(keys.isNotEmpty() && rows.isNotEmpty()) { "В файле нет записей для импорта." }
+            requireInput(keys.isNotEmpty() && rows.isNotEmpty(), R.string.error_no_records)
             return ParsedDocument(rows, keys, false)
         }
     }

@@ -17,6 +17,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import app.offline.vocabulary.data.Rating
+import app.offline.vocabulary.data.StudySettings
+import app.offline.vocabulary.importer.Entry
 import app.offline.vocabulary.data.StudyMode
 import app.offline.vocabulary.data.VocabularyRepository
 import java.io.File
@@ -39,9 +42,77 @@ class MainActivitySmokeTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
+    @Config(sdk = [35], qualifiers = "en-w393dp-h830dp-port-mdpi")
+    fun aTwentyDayStreakAppearsOnOneCompletionScreen() {
+        waitForText("Frequent Serbian")
+        val zone = java.time.ZoneId.systemDefault()
+        var date = java.time.LocalDate.now(zone).minusDays(19)
+        VocabularyRepository(compose.activity.applicationContext,
+            currentTime = { date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli() }).use { history ->
+            history.importDictionary("My word list", listOf(Entry("hvala", "thank you")))
+            repeat(19) { index ->
+                val session = requireNotNull(history.startSession())
+                history.rate(session.id, session.index, Rating.KNOWN)
+                if (index == 0) history.saveSettings(StudySettings(mode = StudyMode.REVIEW))
+                date = date.plusDays(1)
+            }
+        }
+        compose.activityRule.scenario.recreate()
+        waitForText("My word list")
+        val milestone = "Keep it up! You’ve practiced 20 days in a row."
+        repeat(2) { index ->
+            compose.onNodeWithContentDescription("Start a session").performClick()
+            waitForText("hvala")
+            compose.onNodeWithText("Show translation").performClick()
+            waitForText("thank you")
+            compose.onNodeWithText("Know it").performClick()
+            waitForText("Session complete")
+            if (index == 0) {
+                compose.onNodeWithText(milestone).assertIsDisplayed()
+                compose.activityRule.scenario.recreate()
+                waitForText(milestone)
+            } else {
+                compose.onNodeWithText(milestone).assertDoesNotExist()
+            }
+            compose.onNodeWithText("Back to home").performClick()
+            waitForText("My word list")
+        }
+    }
+
+    @Test
+    @Config(sdk = [28, 35], qualifiers = "ru-w393dp-h830dp-port-mdpi")
+    fun switchesInterfaceLanguageAndKeepsTheActiveDictionaryAndHistory() {
+        waitForText("Частотный сербский")
+        compose.onNodeWithContentDescription("Начать занятие").performClick()
+        waitForText("да")
+        compose.onNodeWithText("Показать перевод").performClick()
+        waitForText("да; что; чтобы")
+        compose.onNodeWithText("Знаю").performClick()
+        waitForText("је")
+        compose.onNodeWithContentDescription("Назад").performClick()
+        compose.onNodeWithText("Настройки").performClick()
+        compose.onNodeWithText("Русский / English").performClick()
+        compose.onNodeWithText("English").performClick()
+        waitForText("New words per session")
+        compose.activityRule.scenario.recreate()
+        waitForText("New words per session")
+        compose.onNodeWithText("Home").performClick()
+        waitForText("0.02%")
+        compose.onNodeWithContentDescription("Start a session").performClick()
+        waitForText("је")
+        compose.onNodeWithText("Show translation").performClick()
+        waitForText("есть; является (он, она, оно)")
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Settings").performClick()
+        compose.onNodeWithText("Русский / English").performClick()
+        compose.onNodeWithText("Русский").performClick()
+        waitForText("Новых слов за занятие")
+    }
+
+    @Test
     @Config(sdk = [31, 33, 34, 35])
     fun installedAppOpensBundledDictionaryAndResumesSecondCard() {
-        waitForText(BundledDictionary.name)
+        waitForText("Частотный сербский")
         val context = compose.activity.applicationContext
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
         assertFalse(info.requestedPermissions.orEmpty().contains(Manifest.permission.INTERNET))
@@ -87,7 +158,7 @@ class MainActivitySmokeTest {
 
     @Test
     fun filePickerMappingQuizAndTypedAnswers() {
-        waitForText(BundledDictionary.name)
+        waitForText("Частотный сербский")
         val context = compose.activity.applicationContext
         val fixture = File(context.cacheDir, "mapping.csv").apply {
             writeText(
@@ -154,7 +225,7 @@ class MainActivitySmokeTest {
 
     @Test
     fun backupFileRestoresConfirmedResetAndPendingCard() {
-        waitForText(BundledDictionary.name)
+        waitForText("Частотный сербский")
         compose.onNodeWithContentDescription("Начать занятие").performClick()
         waitForText("да")
         compose.onNodeWithText("Как читать по-русски").assertIsDisplayed()

@@ -4,6 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MasteryPercentTest {
+    private fun formatMasteryPercent(percent: Double) =
+        app.offline.vocabulary.ui.formatMasteryPercent(percent, java.util.Locale.forLanguageTag("ru"))
+
     @Test fun firstAnswerShowsEvenInLargeDictionariesAndCompletionIsExact() {
         assertEquals("0%", formatMasteryPercent(0.0))
         assertEquals("<0,01%", formatMasteryPercent(10.0 / 100_000))

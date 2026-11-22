@@ -1,5 +1,8 @@
 package app.offline.vocabulary.importer
 
+import app.offline.vocabulary.R
+import app.offline.vocabulary.requireInput
+
 private val dash = Regex("\\s+[-–—]\\s+")
 private val listMarker = Regex("^\\s*(?:[-+*]|\\d+[.)])\\s+")
 private val alignment = Regex(":?-{3,}:?")
@@ -42,9 +45,7 @@ internal fun markdownTable(text: String, memory: ImportMemory): ParsedDocument {
         memory.checkTable(tables.sumOf { it.second.size }, headers.size)
         val records = ArrayList<List<String>>()
         for ((header, table) in tables) {
-            require(header.distinct().size == header.size && table.all { it.size <= header.size }) {
-                "В таблицах Markdown нужны разные заголовки для каждого столбца."
-            }
+            requireInput(header.distinct().size == header.size && table.all { it.size <= header.size }, R.string.error_markdown_headers)
             val indices = headers.map(header::indexOf)
             records.addAll(table.map { row -> indices.map { row.getOrNull(it).orEmpty() } })
         }
@@ -153,19 +154,19 @@ internal fun readDelimited(text: String, delimiter: Char, limit: Int = Int.MAX_V
                     cell.setLength(0)
                     quoted = true
                 } else {
-                    require(!closedQuote) { "Лишняя кавычка в записи ${rows.size + 1}." }
+                    requireInput(!closedQuote, R.string.error_extra_quote, rows.size + 1)
                     cell.append(c)
                 }
             }
             else -> {
                 hasContent = true
                 if (closedQuote) {
-                    require(c.isWhitespace()) { "После закрывающей кавычки в записи ${rows.size + 1} нужен разделитель." }
+                    requireInput(c.isWhitespace(), R.string.error_missing_separator, rows.size + 1)
                 } else cell.append(c)
             }
         }
     }
-    require(!quoted) { "В записи ${rows.size + 1} не закрыта кавычка." }
+    requireInput(!quoted, R.string.error_unclosed_quote, rows.size + 1)
     if (hasContent && rows.size < limit) {
         finishCell()
         rows.add(row)

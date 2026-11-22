@@ -17,12 +17,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.offline.vocabulary.R
 
 val Ink = Color(0xFF101012)
 val Panel = Color(0xFF1B1B20)
@@ -142,7 +144,7 @@ fun ScreenHeading(title: String, onBack: () -> Unit, modifier: Modifier = Modifi
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         IconButton(onClick = onBack, modifier = Modifier.background(Panel, CircleShape)) {
-            VocabularyIcon(Glyph.Back, Paper, Modifier.size(22.dp), "Назад")
+            VocabularyIcon(Glyph.Back, Paper, Modifier.size(22.dp), stringResource(R.string.back))
         }
         Text(title, color = Paper, fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-.8).sp)
     }
@@ -179,9 +181,9 @@ fun VocabularyNavigation(
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
                 }
             }
-            Item("Главная", Glyph.Home, !settingsSelected, onHome)
-            Item("Настройки", Glyph.Settings, settingsSelected, onSettings)
-            Item("Добавить", Glyph.Plus, false, onImport)
+            Item(stringResource(R.string.home), Glyph.Home, !settingsSelected, onHome)
+            Item(stringResource(R.string.settings), Glyph.Settings, settingsSelected, onSettings)
+            Item(stringResource(R.string.add), Glyph.Plus, false, onImport)
         }
     }
 }

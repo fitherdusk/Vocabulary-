@@ -1,5 +1,8 @@
 package app.offline.vocabulary.importer
 
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
+import app.offline.vocabulary.requireInput
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.CharacterCodingException
@@ -21,7 +24,7 @@ object DictionaryParser {
                 "txt", "tsv", "csv", "json", "jsonl", "ndjson", "md", "markdown" -> {
                     val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                     val text = InputStreamReader(memory.bounded(input, memory.textBytes), decoder).use { it.readText() }.removePrefix("\uFEFF")
-                    require(text.isNotBlank()) { "Файл пуст." }
+                    requireInput(text.isNotBlank(), R.string.error_empty_file)
                     when (ext) {
                         "csv", "tsv" -> delimitedTable(text, ext)
                         "md", "markdown" -> markdownTable(text, memory)
@@ -29,25 +32,23 @@ object DictionaryParser {
                         else -> plainTable(text)
                     }
                 }
-                else -> throw IllegalArgumentException(
-                    "Выберите файл TXT, CSV, TSV, JSON, JSONL, Markdown, DOCX или PDF."
-                )
+                else -> throw VocabularyProblem(R.string.error_file_type)
             }
         } catch (e: OutOfMemoryError) {
             memory.tooLarge()
         } catch (e: CharacterCodingException) {
-            throw IllegalArgumentException("Не удалось прочитать текст. Сохраните файл в кодировке UTF-8.", e)
+            throw VocabularyProblem(R.string.error_utf8, cause = e)
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: Exception) {
             if (e.message.orEmpty().contains("scratch file memory exceeded")) memory.tooLarge()
             val message = when (ext) {
-                "json", "jsonl", "ndjson" -> "Нарушена структура JSON. Проверьте скобки, кавычки и запятые."
-                "pdf" -> "Не удалось прочитать PDF. Проверьте, открывается ли файл без пароля."
-                "docx" -> "Не удалось прочитать DOCX. Проверьте, открывается ли документ в редакторе."
-                else -> "Не удалось прочитать файл. Проверьте его формат и доступ к файлу."
+                "json", "jsonl", "ndjson" -> R.string.error_invalid_json
+                "pdf" -> R.string.error_invalid_pdf
+                "docx" -> R.string.error_invalid_docx
+                else -> R.string.error_invalid_file
             }
-            throw IllegalArgumentException(message, e)
+            throw VocabularyProblem(message, cause = e)
         }
     }
 }
@@ -65,7 +66,7 @@ private fun jsonTable(text: String, lines: Boolean, memory: ImportMemory): Parse
             if (line.isBlank()) null else try {
                 jsonValue(line)
             } catch (e: JSONException) {
-                throw IllegalArgumentException("Строка ${i + 1}: нарушена структура JSON.", e)
+                throw VocabularyProblem(R.string.error_json_line, i + 1, cause = e)
             }
         }.toList()
     } else {
@@ -76,9 +77,9 @@ private fun jsonTable(text: String, lines: Boolean, memory: ImportMemory): Parse
         } else root
         if (records is JSONArray) List(records.length(), records::opt) else listOf(records)
     }
-    require(values.isNotEmpty()) { "В файле JSON нет записей." }
+    requireInput(values.isNotEmpty(), R.string.error_json_empty)
     if (values.any { it is JSONObject }) {
-        require(values.all { it is JSONObject }) { "Записи JSON должны иметь одну структуру." }
+        requireInput(values.all { it is JSONObject }, R.string.error_json_uniform)
         val objects = values.filterIsInstance<JSONObject>()
         val keys = linkedSetOf<String>()
         for (obj in objects) keys.addAll(obj.keys().asSequence().toList())
@@ -87,14 +88,12 @@ private fun jsonTable(text: String, lines: Boolean, memory: ImportMemory): Parse
         return ParsedDocument.objects(columns, objects.map { obj -> columns.map { asText(obj.opt(it)) } })
     }
     if (values.any { it is JSONArray }) {
-        require(values.all { it is JSONArray }) { "Используйте массивы одинакового типа или объекты с полями." }
+        requireInput(values.all { it is JSONArray }, R.string.error_json_arrays)
         return ParsedDocument.table(values.filterIsInstance<JSONArray>().map { row ->
             List(row.length()) { asText(row.opt(it)) }
         })
     }
-    require(values.all { it is String || it == JSONObject.NULL }) {
-        "Для JSON используйте список слов, таблицу или объекты с полями."
-    }
+    requireInput(values.all { it is String || it == JSONObject.NULL }, R.string.error_json_shape)
     return ParsedDocument.objects(listOf("word"), values.map { listOf(asText(it)) })
 }
 

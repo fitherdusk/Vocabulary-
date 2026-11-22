@@ -4,6 +4,9 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.JsonReader
 import android.util.JsonToken
 import android.util.JsonWriter
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
+import app.offline.vocabulary.requireInput
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -57,7 +60,7 @@ internal object Backup {
         val src = JsonReader(input.reader(Charsets.UTF_8).buffered())
         try {
             src.beginArray()
-            require(src.nextString() == magic && src.nextInt() == 1) { "Неподдерживаемая версия копии" }
+            requireInput(src.nextString() == magic && src.nextInt() == 1, R.string.error_backup_version)
             db.atomic {
                 tables.asReversed().forEach { db.execSQL("DELETE FROM ${it.name}") }
                 tables.forEach { readTable(db, src, it) }
@@ -67,7 +70,7 @@ internal object Backup {
                 db.execSQL("INSERT OR IGNORE INTO installation(id) VALUES(1)")
             }
         } catch (e: Exception) {
-            throw IllegalArgumentException("Не удалось восстановить резервную копию. Проверьте формат и целостность файла.", e)
+            throw VocabularyProblem(R.string.error_backup_invalid, cause = e)
         }
     }
 

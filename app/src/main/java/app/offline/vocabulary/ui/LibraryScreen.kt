@@ -16,12 +16,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.offline.vocabulary.R
 
 @Composable
 fun LibraryScreen(
@@ -39,7 +41,7 @@ fun LibraryScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     Box(modifier.fillMaxSize().background(Ink), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 660.dp).fillMaxSize()) {
-            ScreenHeading("Мои словари", onBack)
+            ScreenHeading(stringResource(R.string.my_dictionaries), onBack)
             if (items.isEmpty()) {
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(
@@ -53,10 +55,10 @@ fun LibraryScreen(
                             VocabularyIcon(Glyph.Book, Lavender, Modifier.size(35.dp))
                         }
                         Spacer(Modifier.height(20.dp))
-                        Text("Пока нет словарей", color = Paper, fontSize = 23.sp,
+                        Text(stringResource(R.string.no_dictionaries), color = Paper, fontSize = 23.sp,
                             fontWeight = FontWeight.Medium, letterSpacing = (-.6).sp, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(8.dp))
-                        Text("Добавьте файл со словами из памяти телефона.",
+                        Text(stringResource(R.string.choose_file_device),
                             Modifier.widthIn(max = 310.dp), color = Quiet, fontSize = 15.sp,
                             lineHeight = 21.sp, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(20.dp))
@@ -87,15 +89,15 @@ fun LibraryScreen(
     if (renameItem != null) {
         AlertDialog(
             onDismissRequest = { renameId = null },
-            title = { Text("Переименовать словарь") },
+            title = { Text(stringResource(R.string.rename_dictionary)) },
             text = {
                 OutlinedTextField(value = draft, onValueChange = { draft = it }, singleLine = true,
-                    label = { Text("Название") }, modifier = Modifier.fillMaxWidth())
+                    label = { Text(stringResource(R.string.name)) }, modifier = Modifier.fillMaxWidth())
             },
-            dismissButton = { TextButton(onClick = { renameId = null }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { renameId = null }) { Text(stringResource(R.string.cancel)) } },
             confirmButton = {
                 TextButton(onClick = { onRename(renameItem.id, draft.trim()); renameId = null },
-                    enabled = draft.isNotBlank()) { Text("Сохранить") }
+                    enabled = draft.isNotBlank()) { Text(stringResource(R.string.save)) }
             }
         )
     }
@@ -103,12 +105,12 @@ fun LibraryScreen(
     if (deleteItem != null) {
         AlertDialog(
             onDismissRequest = { deleteId = null },
-            title = { Text("Удалить словарь?") },
-            text = { Text("Словарь «${deleteItem.title}» и его история занятий будут удалены с устройства.") },
-            dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Отмена") } },
+            title = { Text(stringResource(R.string.delete_dictionary)) },
+            text = { Text(stringResource(R.string.confirm_delete, deleteItem.title)) },
+            dismissButton = { TextButton(onClick = { deleteId = null }) { Text(stringResource(R.string.cancel)) } },
             confirmButton = {
                 TextButton(onClick = { onDelete(deleteItem.id); deleteId = null }) {
-                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             }
         )
@@ -121,7 +123,7 @@ private fun AddDictionaryButton(onImport: () -> Unit, modifier: Modifier = Modif
         shape = RoundedCornerShape(16.dp)) {
         VocabularyIcon(Glyph.Plus, MaterialTheme.colorScheme.onPrimary, Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Добавить словарь", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.add_dictionary), fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -134,28 +136,28 @@ private fun LibraryRow(
     Row(Modifier.fillMaxWidth().clip(shape).background(Panel).border(1.dp,
         if (selected) Lavender.copy(alpha = .48f) else Hairline, shape),
         verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Выбрать словарь", onClick = onSelect)
+        Row(Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = stringResource(R.string.select_dictionary), onClick = onSelect)
             .padding(start = 14.dp, top = 15.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(42.dp).background(if (selected) Lavender.copy(alpha = .15f) else PanelRaised,
                 RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
                 VocabularyIcon(if (selected) Glyph.Check else Glyph.Book, if (selected) Lavender else Quiet,
-                    Modifier.size(21.dp), if (selected) "Выбран" else null)
+                    Modifier.size(21.dp), if (selected) stringResource(R.string.selected_dictionary) else null)
             }
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis, color = Paper,
                     fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(3.dp))
-                Text("Изучено: ${item.learned} / ${item.total}", color = Quiet, fontSize = 13.sp)
+                Text(stringResource(R.string.learned_count, item.learned, item.total), color = Quiet, fontSize = 13.sp)
             }
         }
         Box {
             IconButton(onClick = { menu = true }) {
-                VocabularyIcon(Glyph.More, Quiet, Modifier.size(21.dp), "Действия со словарём «${item.title}»")
+                VocabularyIcon(Glyph.More, Quiet, Modifier.size(21.dp), stringResource(R.string.dictionary_actions, item.title))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Переименовать") }, onClick = { menu = false; onRename() })
-                DropdownMenuItem(text = { Text("Удалить", color = MaterialTheme.colorScheme.error) },
+                DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                     onClick = { menu = false; onDelete() })
             }
         }

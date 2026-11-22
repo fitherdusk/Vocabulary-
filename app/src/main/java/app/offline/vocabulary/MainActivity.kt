@@ -1,5 +1,7 @@
 package app.offline.vocabulary
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -40,12 +42,25 @@ private class CreateLocalBackup : ActivityResultContracts.CreateDocument("applic
 class MainActivity : ComponentActivity() {
     private val model: VocabularyViewModel by viewModels()
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.localized(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dark = android.graphics.Color.rgb(16, 16, 18)
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(dark))
-        setContent { VocabularyTheme { VocabularyApp(model) } }
+        setContent {
+            VocabularyTheme {
+                VocabularyApp(model, AppLanguage.selected(this)) { tag ->
+                    if (tag != AppLanguage.selected(this)) {
+                        AppLanguage.set(this, tag)
+                        recreate()
+                    }
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -55,7 +70,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun VocabularyApp(model: VocabularyViewModel) {
+private fun VocabularyApp(model: VocabularyViewModel, language: String, onLanguageChange: (String) -> Unit) {
     val open = rememberLauncherForActivityResult(OpenLocalFile()) { uri -> uri?.let(model::readDictionary) }
     val restoreFile = rememberLauncherForActivityResult(OpenLocalFile()) { uri -> uri?.let(model::chooseRestore) }
     val destination = rememberLauncherForActivityResult(CreateLocalBackup()) { uri -> uri?.let(model::export) }
@@ -76,8 +91,8 @@ private fun VocabularyApp(model: VocabularyViewModel) {
                     if (model.busy != null) {
                         CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Не удалось открыть библиотеку", color = Paper)
-                        TextButton(onClick = model::initialize) { Text("Попробовать снова") }
+                        Text(stringResource(R.string.open_library_error), color = Paper)
+                        TextButton(onClick = model::initialize) { Text(stringResource(R.string.retry)) }
                     }
                 }
             } else {
@@ -95,7 +110,7 @@ private fun VocabularyApp(model: VocabularyViewModel) {
                                 model::renameDictionary, model::deleteDictionary, importFile, model::back)
                             Screen.STATISTICS -> StatisticsScreen(library.stats, selected?.title,
                                 library.settings.dailyGoal, model::back)
-                            Screen.SETTINGS -> SettingsScreen(library.settings, library.availability, selected?.title,
+                            Screen.SETTINGS -> SettingsScreen(library.settings, library.availability, selected?.title, language, onLanguageChange,
                                 model::saveSettings, model::resetProgress,
                                 { picker { destination.launch("offline-vocabulary-${LocalDate.now()}.json") } },
                                 { picker { restoreFile.launch(arrayOf("*/*")) } }, model::back)
@@ -106,7 +121,7 @@ private fun VocabularyApp(model: VocabularyViewModel) {
                                 StudyScreen(lesson, library.settings, selected?.title.orEmpty(), model::back,
                                     model::rate, busy = model.busy != null)
                             }
-                            Screen.COMPLETE -> StudyCompleteScreen(model.completedCount, library.stats.masteryPercent, model::back)
+                            Screen.COMPLETE -> StudyCompleteScreen(model.completedCount, library.stats.masteryPercent, model.completedMilestone, model::back)
                         }
                     }
                     if (screen == Screen.HOME || screen == Screen.SETTINGS) {
@@ -141,14 +156,14 @@ private fun VocabularyApp(model: VocabularyViewModel) {
 
     if (model.restoreUri != null) {
         AlertDialog(onDismissRequest = { model.chooseRestore(null) },
-            title = { Text("Восстановить библиотеку?") },
-            text = { Text("Словари, занятия и настройки на этом устройстве будут заменены содержимым выбранной копии.") },
-            confirmButton = { TextButton(onClick = model::restore) { Text("Восстановить") } },
-            dismissButton = { TextButton(onClick = { model.chooseRestore(null) }) { Text("Отмена") } })
+            title = { Text(stringResource(R.string.restore_title)) },
+            text = { Text(stringResource(R.string.restore_description)) },
+            confirmButton = { TextButton(onClick = model::restore) { Text(stringResource(R.string.restore)) } },
+            dismissButton = { TextButton(onClick = { model.chooseRestore(null) }) { Text(stringResource(R.string.cancel)) } })
     }
     model.notice?.let { notice ->
         AlertDialog(onDismissRequest = model::dismissNotice, title = { Text(notice.title) },
             text = { Text(notice.message) },
-            confirmButton = { TextButton(onClick = model::dismissNotice) { Text("Понятно") } })
+            confirmButton = { TextButton(onClick = model::dismissNotice) { Text(stringResource(R.string.ok)) } })
     }
 }

@@ -30,10 +30,10 @@ class PdfParserTest {
     }
 
     @Test fun rejectsMissingTextLayer() {
-        val error = assertThrows(IllegalArgumentException::class.java) {
+        val error = assertThrows(app.offline.vocabulary.VocabularyProblem::class.java) {
             DictionaryParser.parse("scan.pdf", pdf(null).inputStream())
         }
-        assertTrue(error.message.orEmpty().contains("текстовый слой"))
+        assertEquals(app.offline.vocabulary.R.string.error_pdf_text, error.resource)
     }
 
     private fun pdf(line: String?): ByteArray = PDDocument().use { document ->

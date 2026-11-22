@@ -22,7 +22,7 @@ class BundledUpdateTest {
         val oldWords = BundledDictionary.read(context.assets).map { Entry(it.word) }
         val backup = ByteArrayOutputStream()
         VocabularyRepository(context, name).use { repo ->
-            repo.installBundledIfNeeded(BundledDictionary.name) { oldWords }
+            repo.installBundledIfNeeded("Частотный сербский") { oldWords }
             repo.renameDictionary(1, "Мой сербский")
             val session = repo.startSession()!!
             repo.rate(session.id, 0, Rating.KNOWN)

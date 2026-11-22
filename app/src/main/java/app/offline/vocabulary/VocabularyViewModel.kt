@@ -32,6 +32,7 @@ class VocabularyViewModel(
     application: Application, private val state: SavedStateHandle
 ) : AndroidViewModel(application) {
     private val repo = (application as VocabularyApplication).repository
+    private fun text(id: Int) = AppLanguage.localized(getApplication<Application>()).getString(id)
     private val documents = LocalDocuments(application)
     var screen by mutableStateOf(Screen.valueOf(state["screen"] ?: Screen.HOME.name))
         private set
@@ -45,6 +46,8 @@ class VocabularyViewModel(
         private set
     var completedCount by mutableStateOf(state["completedCount"] ?: 0)
         private set
+    var completedMilestone by mutableStateOf(state.get<Int>("completedMilestone"))
+        private set
     var restoreUri by mutableStateOf(state.get<String>("restoreUri"))
         private set
     var busy by mutableStateOf<String?>(null)
@@ -54,9 +57,9 @@ class VocabularyViewModel(
 
     init { initialize() }
 
-    fun initialize() = runTask("Открываем библиотеку") {
+    fun initialize() = runTask(text(R.string.opening_library)) {
         withContext(Dispatchers.IO) {
-            repo.installBundledIfNeeded(BundledDictionary.name) {
+            repo.installBundledIfNeeded(text(R.string.frequent_serbian)) {
                 BundledDictionary.read(getApplication<Application>().assets)
             }
         }
@@ -118,7 +121,7 @@ class VocabularyViewModel(
     fun dismissNotice() { notice = null }
 
     fun filePickerUnavailable() {
-        notice = Notice("Файловый менеджер недоступен", "Для выбора файла включите системное приложение «Файлы».")
+        notice = Notice(text(R.string.picker_unavailable), text(R.string.enable_picker))
     }
 
     private fun runTask(label: String, action: suspend () -> Unit) {
@@ -133,16 +136,15 @@ class VocabularyViewModel(
     }
 
     private fun report(e: Exception) {
-        val fallback = "Операцию не удалось завершить. Попробуйте ещё раз."
+        val fallback = text(R.string.operation_failed)
         val message = when (e) {
-            is SQLiteFullException -> "На устройстве закончилось свободное место."
-            is SecurityException, is FileNotFoundException -> "Файл недоступен. Выберите его снова в памяти устройства."
-            is IllegalArgumentException, is IllegalStateException, is IOException ->
-                e.localizedMessage?.takeIf { it.any { ch -> ch in 'А'..'я' } }
-                    ?: if (e is IOException) "Не удалось прочитать или записать файл. Проверьте формат и свободное место." else fallback
+            is SQLiteFullException -> text(R.string.storage_full)
+            is SecurityException, is FileNotFoundException -> text(R.string.file_unavailable)
+            is VocabularyProblem -> e.display(AppLanguage.localized(getApplication<Application>()))
+            is IOException -> text(R.string.file_io_error)
             else -> fallback
         }
-        notice = Notice("Не удалось выполнить действие", message)
+        notice = Notice(text(R.string.error_title), message)
     }
 
     private suspend fun parseDraft(name: String) = withContext(Dispatchers.IO) {
@@ -156,7 +158,7 @@ class VocabularyViewModel(
         documents.draft.delete()
     }
 
-    fun readDictionary(uri: Uri) = runTask("Читаем словарь") {
+    fun readDictionary(uri: Uri) = runTask(text(R.string.reading_dictionary)) {
         val name = withContext(Dispatchers.IO) {
             val displayName = documents.displayName(uri)
             documents.stage(uri)
@@ -173,7 +175,7 @@ class VocabularyViewModel(
         go(Screen.IMPORT)
     }
 
-    fun importDictionary(name: String, entries: List<Entry>) = runTask("Сохраняем словарь") {
+    fun importDictionary(name: String, entries: List<Entry>) = runTask(text(R.string.saving_dictionary)) {
         withContext(Dispatchers.IO) { repo.importDictionary(name, entries) }
         parsed = null
         clearDraft()
@@ -181,7 +183,7 @@ class VocabularyViewModel(
         reload()
     }
 
-    fun selectDictionary(id: Long) = runTask("Выбираем словарь") {
+    fun selectDictionary(id: Long) = runTask(text(R.string.selecting_dictionary)) {
         withContext(Dispatchers.IO) { repo.selectDictionary(id) }
         reload()
         go(Screen.HOME)
@@ -195,25 +197,25 @@ class VocabularyViewModel(
     }
     fun saveSettings(new: StudySettings) = updateLibrary { repo.saveSettings(new) }
 
-    private fun updateLibrary(change: () -> Unit) = runTask("Сохраняем изменения") {
+    private fun updateLibrary(change: () -> Unit) = runTask(text(R.string.saving_changes)) {
         withContext(Dispatchers.IO) { change() }
         reload()
     }
 
-    fun start() = runTask("Готовим занятие") {
+    fun start() = runTask(text(R.string.preparing_session)) {
         val current = withContext(Dispatchers.IO) { repo.startSession() }
         if (current == null) {
             reload()
             val snapshot = library ?: return@runTask
             notice = when {
                 !snapshot.availability.allows(snapshot.settings.mode) ->
-                    Notice("Режим недоступен", when (snapshot.settings.mode) {
-                        StudyMode.QUIZ -> "Для теста нужны четыре разных варианта перевода. Выберите карточки в настройках."
-                        StudyMode.TYPING -> "Добавьте словарь с переводами или выберите карточки в настройках."
-                        StudyMode.REVIEW -> "Сначала познакомьтесь со словами в режиме карточек."
-                        StudyMode.CARDS -> "Добавьте словарь, чтобы начать занятие."
+                    Notice(text(R.string.mode_unavailable), when (snapshot.settings.mode) {
+                        StudyMode.QUIZ -> text(R.string.quiz_unavailable)
+                        StudyMode.TYPING -> text(R.string.typing_unavailable)
+                        StudyMode.REVIEW -> text(R.string.review_unavailable)
+                        StudyMode.CARDS -> text(R.string.add_to_start)
                     })
-                else -> Notice("Все доступные слова пройдены", "Сейчас в этом режиме нет новых слов или повторений, для которых уже наступил срок. Уже знакомые слова можно открыть в режиме «Повторение».")
+                else -> Notice(text(R.string.all_done), text(R.string.no_words_due))
             }
         } else {
             session = current
@@ -223,10 +225,12 @@ class VocabularyViewModel(
 
     fun rate(rating: Rating) {
         val current = session ?: return
-        runTask("Сохраняем ответ") {
+        runTask(text(R.string.saving_answer)) {
             val next = withContext(Dispatchers.IO) { repo.rate(current.id, current.index, rating) }
             session = next
             if (next == null) {
+                completedMilestone = withContext(Dispatchers.IO) { repo.milestoneForCompletion(current.id) }
+                state["completedMilestone"] = completedMilestone
                 completedCount = current.total
                 state["completedCount"] = completedCount
                 reload()
@@ -235,9 +239,9 @@ class VocabularyViewModel(
         }
     }
 
-    fun export(uri: Uri) = runTask("Создаём резервную копию") {
+    fun export(uri: Uri) = runTask(text(R.string.creating_backup)) {
         withContext(Dispatchers.IO) { documents.writeBackup(uri, repo::exportBackup) }
-        notice = Notice("Копия сохранена", "Словари и прогресс записаны в выбранный файл.")
+        notice = Notice(text(R.string.backup_saved), text(R.string.backup_saved_description))
     }
 
     fun chooseRestore(uri: Uri?) {
@@ -248,12 +252,12 @@ class VocabularyViewModel(
     fun restore() {
         val source = restoreUri ?: return
         chooseRestore(null)
-        runTask("Восстанавливаем библиотеку") {
+        runTask(text(R.string.restoring_library)) {
             withContext(Dispatchers.IO) { documents.open(Uri.parse(source)).use(repo::restoreBackup) }
             session = null
             reload()
             go(Screen.HOME)
-            notice = Notice("Библиотека восстановлена", "Словари и прогресс загружены из резервной копии.")
+            notice = Notice(text(R.string.library_restored), text(R.string.library_restored_description))
         }
     }
 }

@@ -19,59 +19,61 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.offline.vocabulary.R
 import app.offline.vocabulary.data.Stats
 
 @Composable
 fun StatisticsScreen(stats: Stats, dictionaryName: String?, dailyGoal: Int, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Ink)) {
-        ScreenHeading("Статистика", onBack)
+        ScreenHeading(stringResource(R.string.statistics), onBack)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(dictionaryName ?: "Библиотека пуста", color = Quiet)
+            Text(dictionaryName ?: stringResource(R.string.empty_library), color = Quiet)
             Surface(color = Panel, shape = StudyShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     MasteryRing(stats.masteryPercent)
-                    Text("Изучено ${stats.learned} из ${stats.total}", color = Paper, textAlign = TextAlign.Center,
+                    Text(stringResource(R.string.learned_of_total, stats.learned, stats.total), color = Paper, textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleMedium)
                 }
             }
             Surface(color = Panel, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    StageLine("Новые", stats.newWords, Hairline)
-                    StageLine("В процессе изучения", stats.learning, Color(0xFF8981B6))
-                    StageLine("Изучено", stats.learned, Lavender)
-                    Text("«Не знаю» и «Трудно» дают 10% за слово. Ответы «Знаю» подряд дают 40%, 70% и 100%.",
+                    StageLine(stringResource(R.string.new_words), stats.newWords, Hairline)
+                    StageLine(stringResource(R.string.words_in_progress), stats.learning, Color(0xFF8981B6))
+                    StageLine(stringResource(R.string.learned), stats.learned, Lavender)
+                    Text(stringResource(R.string.mastery_explanation),
                         color = Quiet, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Text("Активность", Modifier.padding(top = 4.dp, start = 2.dp), color = Paper,
+            Text(stringResource(R.string.activity), Modifier.padding(top = 4.dp, start = 2.dp), color = Paper,
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Surface(color = Panel, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Дневная цель", Modifier.weight(1f), color = Paper)
+                        Text(stringResource(R.string.daily_goal), Modifier.weight(1f), color = Paper)
                         Text("${stats.today} / $dailyGoal", color = Lavender, fontWeight = FontWeight.Medium)
                     }
                     ThinProgress(stats.today.toFloat() / dailyGoal.coerceAtLeast(1))
-                    Text("Разных слов за сегодня", color = Quiet, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.unique_words_today), color = Quiet, style = MaterialTheme.typography.bodySmall)
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatTile("Занятий", stats.sessions.toString(), Modifier.weight(1f))
-                StatTile("Серия в днях", stats.streak.toString(), Modifier.weight(1f))
+                StatTile(stringResource(R.string.sessions), stats.sessions.toString(), Modifier.weight(1f))
+                StatTile(stringResource(R.string.streak_days), stats.streak.toString(), Modifier.weight(1f))
             }
             Surface(shape = RoundedCornerShape(20.dp), color = Panel) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Повторить сегодня", Modifier.weight(1f), color = Paper)
+                    Text(stringResource(R.string.due_today), Modifier.weight(1f), color = Paper)
                     Text(stats.due.toString(), fontWeight = FontWeight.SemiBold, color = Lavender,
                         style = MaterialTheme.typography.titleLarge)
                 }
@@ -99,10 +101,10 @@ private fun MasteryRing(percent: Double) {
             }
         }
         Column(Modifier.padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            val label = formatMasteryPercent(percent)
+            val label = masteryLabel(percent)
             Text(label, color = Paper, fontWeight = FontWeight.SemiBold,
                 fontSize = if (label.length > 5) 26.sp else 32.sp, lineHeight = 36.sp, textAlign = TextAlign.Center)
-            Text("освоено", color = Quiet, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.mastered), color = Quiet, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

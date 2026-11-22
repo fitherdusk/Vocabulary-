@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -36,10 +37,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
+import app.offline.vocabulary.R
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 data class LibraryItem(val id: Long, val title: String, val learned: Int, val total: Int)
 
@@ -113,7 +115,7 @@ private fun HomeHeader(onStatistics: () -> Unit) {
         IconButton(onClick = onStatistics) {
             Box(Modifier.size(40.dp).background(Panel, CircleShape)
                 .border(1.dp, Hairline.copy(alpha = .8f), CircleShape), contentAlignment = Alignment.Center) {
-                VocabularyIcon(Glyph.Stats, Paper, Modifier.size(22.dp), "Статистика")
+                VocabularyIcon(Glyph.Stats, Paper, Modifier.size(22.dp), stringResource(R.string.statistics))
             }
         }
     }
@@ -122,9 +124,9 @@ private fun HomeHeader(onStatistics: () -> Unit) {
 @Composable
 private fun StartRing(animations: Boolean, empty: Boolean, onStart: () -> Unit, modifier: Modifier) {
     val breathing = if (animations) {
-        val transition = rememberInfiniteTransition(label = "Свечение кольца")
+        val transition = rememberInfiniteTransition(label = "Ring glow")
         transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3200), RepeatMode.Reverse),
-            label = "Яркость")
+            label = "Brightness")
     } else null
     val scale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
@@ -195,8 +197,8 @@ private fun StartRing(animations: Boolean, empty: Boolean, onStart: () -> Unit, 
                         strokeWidth = if (major) 1.15.dp.toPx() else 0.8.dp.toPx(), cap = StrokeCap.Round)
                 }
             }
-            val label = if (empty) "Начать. Выбрать файл словаря" else "Начать занятие"
-            val actionLabel = if (empty) "Добавить словарь" else "Открыть занятие"
+            val label = if (empty) stringResource(R.string.choose_to_start) else stringResource(R.string.start_session)
+            val actionLabel = if (empty) stringResource(R.string.add_dictionary) else stringResource(R.string.open_session)
             Column(
                 Modifier.size(diameter * .71f).clip(CircleShape)
                     .clickable(onClickLabel = actionLabel, role = Role.Button, onClick = activate)
@@ -209,7 +211,7 @@ private fun StartRing(animations: Boolean, empty: Boolean, onStart: () -> Unit, 
             ) {
                 VocabularyIcon(Glyph.Play, Lavender, Modifier.size(if (diameter < 250.dp) 17.dp else 20.dp))
                 Spacer(Modifier.height(5.dp))
-                Text("Начать", color = Paper, fontSize = if (diameter < 250.dp) 29.sp else 37.sp,
+                Text(stringResource(R.string.start), color = Paper, fontSize = if (diameter < 250.dp) 29.sp else 37.sp,
                     lineHeight = if (diameter < 250.dp) 34.sp else 43.sp,
                     fontWeight = FontWeight.Medium, letterSpacing = (-1.5).sp, maxLines = 1)
             }
@@ -228,7 +230,7 @@ private fun DictionaryPanel(
     val surfaceShape = RoundedCornerShape(25.dp)
     Column(modifier.clip(surfaceShape).background(Panel).border(1.dp, Hairline.copy(alpha = .8f), surfaceShape)) {
         Column(Modifier.fillMaxWidth().clickable(role = Role.Button,
-            onClickLabel = "Открыть список словарей", onClick = onLibrary).padding(18.dp)) {
+            onClickLabel = stringResource(R.string.open_library), onClick = onLibrary).padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(43.dp).background(Lavender.copy(alpha = .10f), RoundedCornerShape(14.dp)),
@@ -236,11 +238,11 @@ private fun DictionaryPanel(
                 ) { VocabularyIcon(Glyph.Book, Lavender, Modifier.size(23.dp)) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(selected?.title ?: "Библиотека пуста", fontSize = 17.sp,
+                    Text(selected?.title ?: stringResource(R.string.empty_library), fontSize = 17.sp,
                         lineHeight = 21.sp, color = Paper, fontWeight = FontWeight.Medium,
                         letterSpacing = (-.3).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(3.dp))
-                    Text(if (selected == null) "Добавьте файл со словами" else "Изучено: ${selected.learned} / ${selected.total}",
+                    Text(if (selected == null) stringResource(R.string.add_words_file) else stringResource(R.string.learned_count, selected.learned, selected.total),
                         color = Quiet, fontSize = 13.sp, lineHeight = 17.sp)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -249,8 +251,8 @@ private fun DictionaryPanel(
             if (selected != null) {
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Освоение словаря", Modifier.weight(1f), color = Quiet, fontSize = 13.sp)
-                    Text(formatMasteryPercent(masteryPercent), color = Lavender, fontSize = 14.sp,
+                    Text(stringResource(R.string.dictionary_mastery), Modifier.weight(1f), color = Quiet, fontSize = 13.sp)
+                    Text(masteryLabel(masteryPercent), color = Lavender, fontSize = 14.sp,
                         fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(5.dp))
@@ -265,7 +267,7 @@ private fun DictionaryPanel(
         ) {
             VocabularyIcon(Glyph.Plus, Lavender, Modifier.size(17.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Добавить словарь", color = Lavender, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.add_dictionary), color = Lavender, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
     }
 }

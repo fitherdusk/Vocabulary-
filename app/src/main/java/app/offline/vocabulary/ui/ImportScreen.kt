@@ -45,11 +45,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
 import app.offline.vocabulary.importer.Entry
 import app.offline.vocabulary.importer.ImportResult
 import app.offline.vocabulary.importer.Mapping
@@ -58,8 +63,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private enum class ImportField(val title: String) {
-    WORD("Слово"), TRANSLATION("Перевод"), TRANSCRIPTION("Транскрипция"), EXAMPLE("Пример")
+private enum class ImportField(val title: Int) {
+    WORD(R.string.word), TRANSLATION(R.string.translation), TRANSCRIPTION(R.string.transcription), EXAMPLE(R.string.example)
 }
 
 private val mappingSaver = listSaver<Mapping, Int>(
@@ -82,7 +87,7 @@ private fun Mapping.assign(field: ImportField, column: Int): Mapping {
     return Mapping(columns[0], columns[1], columns[2], columns[3])
 }
 
-private data class Preview(val result: ImportResult? = null, val hasTranslations: Boolean = false, val error: String? = null)
+private data class Preview(val result: ImportResult? = null, val hasTranslations: Boolean = false, val error: Exception? = null)
 
 @Composable
 fun ImportScreen(
@@ -92,8 +97,9 @@ fun ImportScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val defaultName = stringResource(R.string.my_dictionary)
     var name by rememberSaveable(filename) {
-        mutableStateOf(filename.substringBeforeLast('.', filename).trim().ifBlank { "Мой словарь" })
+        mutableStateOf(filename.substringBeforeLast('.', filename).trim().ifBlank { defaultName })
     }
     var hasHeader by rememberSaveable(filename) { mutableStateOf(document.firstRowIsHeader) }
     val adjusted by key(document, hasHeader) {
@@ -106,7 +112,7 @@ fun ImportScreen(
         modifier.fillMaxSize().imePadding().background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ScreenHeading("Импорт словаря", onBack, Modifier.widthIn(max = 700.dp))
+        ScreenHeading(stringResource(R.string.import_title), onBack, Modifier.widthIn(max = 700.dp))
 
         Column(
             Modifier.widthIn(max = 700.dp).fillMaxWidth().weight(1f)
@@ -119,7 +125,7 @@ fun ImportScreen(
             )
             OutlinedTextField(
                 value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth(),
-                label = { Text("Название словаря") }, singleLine = true,
+                label = { Text(stringResource(R.string.dictionary_name)) }, singleLine = true,
                 isError = name.isBlank(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 shape = RoundedCornerShape(16.dp)
             )
@@ -131,7 +137,7 @@ fun ImportScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Первая строка содержит заголовки", Modifier.weight(1f))
+                    Text(stringResource(R.string.first_row_headers), Modifier.weight(1f))
                     Switch(checked = hasHeader, onCheckedChange = null)
                 }
             }
@@ -157,21 +163,22 @@ private fun ImportColumns(
         mutableStateOf(source.suggested)
     }
     var picking by rememberSaveable(filename, hasHeader) { mutableStateOf<ImportField?>(null) }
-    val preview by key(source, mapping) {
+    val resources = LocalContext.current.resources
+    val preview by key(source, mapping, LocalConfiguration.current.locales.toLanguageTags()) {
         produceState(Preview()) {
             value = try {
                 withContext(Dispatchers.Default) {
-                    val result = source.prepare(mapping)
+                    val result = source.prepare(mapping) { resources.getString(R.string.column_number, it + 1) }
                     Preview(result, result.entries.any { it.translation.isNotBlank() })
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Preview(error = e.localizedMessage ?: "Не удалось прочитать выбранные столбцы.")
+                Preview(error = e)
             }
         }
     }
-    SectionTitle("Соответствие столбцов")
+    SectionTitle(stringResource(R.string.map_columns))
     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column {
             ImportField.values().forEachIndexed { index, field ->
@@ -182,7 +189,7 @@ private fun ImportColumns(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(field.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(field.title), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                     Text(
                         columnName(source, mapping.column(field)), Modifier.weight(1.2f),
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -203,7 +210,7 @@ private fun ImportColumns(
         val current = mapping.column(field)
         AlertDialog(
             onDismissRequest = { picking = null },
-            title = { Text(field.title) },
+            title = { Text(stringResource(field.title)) },
             text = {
                 val indices = if (field == ImportField.WORD) source.headers.indices else -1..source.headers.lastIndex
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
@@ -230,26 +237,26 @@ private fun ImportColumns(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { picking = null }) { Text("Закрыть") } }
+            confirmButton = { TextButton(onClick = { picking = null }) { Text(stringResource(R.string.close)) } }
         )
     }
 
-    SectionTitle("Предварительный просмотр")
+    SectionTitle(stringResource(R.string.preview))
     val result = preview.result
     val error = preview.error
     when {
-        error != null -> Text(error, color = MaterialTheme.colorScheme.error)
+        error != null -> Text(if (error is VocabularyProblem) error.display(LocalContext.current) else stringResource(R.string.error_columns), color = MaterialTheme.colorScheme.error)
         result == null -> ImportProgress()
         else -> {
             Text(
-                "К импорту ${result.entries.size}   ·   Дубликатов ${result.duplicates}   ·   Пустых ${result.empty}",
+                stringResource(R.string.import_counts, result.entries.size, result.duplicates, result.empty),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (result.entries.isEmpty()) {
-                Text("В выбранном столбце нет слов. Измените соответствие столбцов.", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.empty_word_column), color = MaterialTheme.colorScheme.error)
             } else {
                 if (!preview.hasTranslations) {
-                    Text("Словарь без переводов. Можно заниматься по карточкам и повторять знакомые слова.",
+                    Text(stringResource(R.string.no_translations),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -266,13 +273,14 @@ private fun ImportColumns(
                 enabled = result.entries.isNotEmpty() && name.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 shape = RoundedCornerShape(18.dp)
-            ) { Text("Импортировать словарь") }
+            ) { Text(stringResource(R.string.import_dictionary)) }
         }
     }
 }
 
+@Composable
 private fun columnName(document: ParsedDocument, index: Int): String =
-    if (index < 0) "Без столбца" else document.headers.getOrNull(index)?.takeIf { it.isNotBlank() } ?: "Столбец ${index + 1}"
+    if (index < 0) stringResource(R.string.unused_column) else document.headerName(index) ?: stringResource(R.string.column_number, index + 1)
 
 @Composable
 private fun SectionTitle(title: String) {

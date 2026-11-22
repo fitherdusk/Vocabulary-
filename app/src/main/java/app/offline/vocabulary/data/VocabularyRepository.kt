@@ -4,11 +4,13 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import app.offline.vocabulary.R
 import app.offline.vocabulary.importer.Entry
+import app.offline.vocabulary.requireInput
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
-import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneId
 
 internal fun <T> SQLiteDatabase.atomic(block: () -> T): T {
@@ -30,7 +32,10 @@ internal fun Cursor.longNumber(field: String): Long = getLong(getColumnIndexOrTh
 internal fun Cursor.text(field: String): String = getString(getColumnIndexOrThrow(field))
 internal fun Boolean.flag() = if (this) 1 else 0
 
-class VocabularyRepository(context: Context, databaseName: String = "vocabulary.sqlite") : Closeable {
+class VocabularyRepository(
+    context: Context, databaseName: String = "vocabulary.sqlite",
+    private val currentTime: () -> Long = System::currentTimeMillis
+) : Closeable {
     private val appContext = context.applicationContext
     private val helper = VocabularyDatabase(appContext, databaseName)
     private val db: SQLiteDatabase get() = helper.writableDatabase
@@ -54,8 +59,8 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
     }.single()
 
     fun saveSettings(settings: StudySettings) = db.atomic {
-        require(settings.newPerSession > 0 && settings.dailyGoal > 0) { "Количество слов должно быть положительным" }
-        require(settings.fontSize in 12..100) { "Размер шрифта должен быть от 12 до 100" }
+        requireInput(settings.newPerSession > 0 && settings.dailyGoal > 0, R.string.error_positive_limit)
+        requireInput(settings.fontSize in 12..100, R.string.error_font_range)
         val old = settings()
         if (old.mode != settings.mode || old.reverse != settings.reverse ||
             old.randomOrder != settings.randomOrder || old.newPerSession != settings.newPerSession) {
@@ -95,7 +100,7 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
     }
 
     fun importDictionary(name: String, entries: List<Entry>): Long = db.atomic {
-        require(name.isNotBlank()) { "Введите название словаря" }
+        requireInput(name.isNotBlank(), R.string.error_empty_name)
         val dictionary = db.insertOrThrow("dictionaries", null, ContentValues().apply { put("name", name.trim()) })
         var inserted = 0
         val unique = mutableSetOf<Pair<String,String>>()
@@ -113,7 +118,7 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
                 }
             }
         }
-        require(inserted > 0) { "В словаре нет слов для импорта" }
+        requireInput(inserted > 0, R.string.error_empty_entries)
         storeCapabilities(db, dictionary, unique)
         select(dictionary)
         dictionary
@@ -131,11 +136,11 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
     }
 
     private fun checkDictionary(id: Long) {
-        require(db.rows("SELECT 1 FROM dictionaries WHERE id=?", id) { true }.isNotEmpty()) { "Словарь не найден" }
+        requireInput(db.rows("SELECT 1 FROM dictionaries WHERE id=?", id) { true }.isNotEmpty(), R.string.error_missing_dictionary)
     }
 
     fun renameDictionary(id: Long, name: String) = db.atomic {
-        require(name.isNotBlank()) { "Введите название словаря" }
+        requireInput(name.isNotBlank(), R.string.error_empty_name)
         checkDictionary(id)
         db.execSQL("UPDATE dictionaries SET name=? WHERE id=?", arrayOf(name.trim(), id))
     }
@@ -160,7 +165,7 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
 
     private fun stats(id: Long): Stats {
         val zone = ZoneId.systemDefault()
-        val date = LocalDate.now(zone)
+        val date = Instant.ofEpochMilli(currentTime()).atZone(zone).toLocalDate()
         val today = date.toEpochDay()
         val tomorrow = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val wordStats = db.rows("""SELECT COUNT(*) AS total, COUNT(CASE WHEN attempts=0 THEN 1 END) AS new_words,
@@ -181,15 +186,35 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
             it.getLong(0) to it.getInt(1)
         }
         val todayCount = days.firstOrNull { it.first == today }?.second ?: 0
-        var target = if (todayCount > 0) today else today - 1
-        var streak = 0
-        for ((day, _) in days) {
-            if (day > target) continue
-            if (day != target) break
-            streak++
-            target--
-        }
+        val lastStudyDay = if (todayCount > 0) today else today - 1
+        val streak = consecutiveDays(days.asSequence().map { it.first }, lastStudyDay)
         return wordStats.copy(sessions = sessions, streak = streak, today = todayCount)
+    }
+
+    /** The first session completed after crossing a milestone owns the celebration.
+     * Completion and answer dates survive backups, so this also works with older history.
+     */
+    fun milestoneForCompletion(sessionId: Long): Int? = db.atomic {
+        val completed = db.rows("""SELECT s.dictionary_id, a.day FROM sessions s
+            JOIN answers a ON a.session_id=s.id AND a.position=s.total-1
+            WHERE s.id=? AND s.status='finished'""", sessionId) {
+            it.getLong(0) to it.getLong(1)
+        }.singleOrNull() ?: return@atomic null
+        val (dictionaryId, day) = completed
+        val previous = db.rows("""SELECT a.day FROM sessions s
+            JOIN answers a ON a.session_id=s.id AND a.position=s.total-1
+            WHERE s.dictionary_id=? AND s.status='finished' AND s.id<? ORDER BY s.id DESC LIMIT 1""",
+            dictionaryId, sessionId) { it.getLong(0) }.firstOrNull()
+        if (previous == day) return@atomic null
+
+        val studyDays = db.rows("""SELECT DISTINCT a.day FROM answers a
+            JOIN sessions s ON s.id=a.session_id WHERE s.dictionary_id=? AND s.id<=? AND a.day<=?
+            ORDER BY a.day DESC""", dictionaryId, sessionId, day) { it.getLong(0) }
+        val streak = consecutiveDays(studyDays.asSequence(), day)
+        val start = day - streak + 1
+        val previousLength = previous?.let { it - start + 1 } ?: 0L
+        val crossedMilestone = listOf(3, 7, 14, 20, 30, 60, 100).any { it > previousLength && it <= streak }
+        if (crossedMilestone) streak else null
     }
 
     fun startSession(): StudySession? = db.atomic {
@@ -198,7 +223,7 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
         val pref = settings()
         val pool = StudyPool(db, id, pref.reverse)
         if (!pool.availability.allows(pref.mode)) return@atomic null
-        val queue = pool.queue(pref, System.currentTimeMillis())
+        val queue = pool.queue(pref, currentTime())
         if (queue.isEmpty()) return@atomic null
         val sid = db.insertOrThrow("sessions", null, ContentValues().apply {
             put("dictionary_id", id); put("mode", pref.mode.name); put("reverse", pool.reverse.flag()); put("total", queue.size)
@@ -238,13 +263,13 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
         val old = db.rows("SELECT attempts,successes,errors,ease,interval_days,last,due FROM words WHERE id=?", wid) {
             Progress(it.getInt(0),it.getInt(1),it.getInt(2),it.getDouble(3),it.getInt(4),it.getLong(5),it.getLong(6))
         }.single()
-        val now = System.currentTimeMillis()
+        val now = currentTime()
         val zone = ZoneId.systemDefault()
         val next = schedule(old, rating, now, zone)
         db.execSQL("UPDATE words SET attempts=?,successes=?,errors=?,ease=?,interval_days=?,last=?,due=? WHERE id=?",
             arrayOf(next.attempts,next.successes,next.errors,next.ease,next.interval,next.last,next.due,wid))
         db.execSQL("INSERT INTO answers(session_id,position,word_id,grade,time,day) VALUES(?,?,?,?,?,?)",
-            arrayOf(sessionId, index, wid, rating.name, now, java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()))
+            arrayOf(sessionId, index, wid, rating.name, now, Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()))
         val finished = index + 1 == session.total
         db.execSQL("UPDATE sessions SET position=?,status=? WHERE id=?",
             arrayOf(index + 1, if (finished) "finished" else "active", sessionId))
@@ -269,4 +294,14 @@ class VocabularyRepository(context: Context, databaseName: String = "vocabulary.
         rebuildCapabilities(db)
     }
     override fun close() = helper.close()
+}
+
+private fun consecutiveDays(daysDescending: Sequence<Long>, endDay: Long): Int {
+    var expected = endDay
+    for (day in daysDescending) {
+        if (day > expected) continue
+        if (day < expected) break
+        expected--
+    }
+    return (endDay - expected).toInt()
 }

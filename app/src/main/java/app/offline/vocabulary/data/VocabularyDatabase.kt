@@ -2,9 +2,11 @@ package app.offline.vocabulary.data
 
 import android.content.Context
 import android.content.res.AssetManager
-import app.offline.vocabulary.BundledDictionary
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import app.offline.vocabulary.BundledDictionary
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
 
 internal class VocabularyDatabase(private val context: Context, name: String) : SQLiteOpenHelper(context, name, null, 2) {
     override fun onConfigure(db: SQLiteDatabase) {
@@ -68,7 +70,7 @@ internal class VocabularyDatabase(private val context: Context, name: String) : 
             db.execSQL("DELETE FROM capabilities")
             rebuildCapabilities(db)
         } else {
-            error("Неподдерживаемая версия базы данных: $oldVersion → $newVersion")
+            throw VocabularyProblem(R.string.error_db_version, oldVersion, newVersion)
         }
     }
 }

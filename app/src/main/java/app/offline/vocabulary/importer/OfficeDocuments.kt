@@ -1,5 +1,8 @@
 package app.offline.vocabulary.importer
 
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
+import app.offline.vocabulary.requireInput
 import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
@@ -14,15 +17,11 @@ import org.xml.sax.ext.DefaultHandler2
 internal fun readPdf(input: InputStream, memory: ImportMemory): ParsedDocument {
     val scratch = MemoryUsageSetting.setupMainMemoryOnly(memory.officeBytes)
     PDDocument.load(memory.bounded(input, memory.officeBytes), scratch).use { document ->
-        require(document.currentAccessPermission.canExtractContent()) {
-            "Автор PDF запретил извлечение текста."
-        }
+        requireInput(document.currentAccessPermission.canExtractContent(), R.string.error_pdf_permissions)
         val output = PdfTextOutput(memory)
         ColumnTextStripper().writeText(document, output)
         val text = output.toString()
-        require(text.isNotBlank()) {
-            "В PDF не найден текстовый слой. Выберите текстовый PDF или сохраните словарь в TXT."
-        }
+        requireInput(text.isNotBlank(), R.string.error_pdf_text)
         return plainTable(text)
     }
 }
@@ -77,7 +76,7 @@ internal fun readDocx(input: InputStream, memory: ImportMemory): ParsedDocument 
             return plainTable(handler.paragraphs.joinToString("\n"))
         }
     }
-    throw IllegalArgumentException("В DOCX отсутствует основной документ. Проверьте формат файла.")
+    throw VocabularyProblem(R.string.error_docx_body)
 }
 
 private class WordContent : DefaultHandler2() {
@@ -90,11 +89,11 @@ private class WordContent : DefaultHandler2() {
     private var inText = false
 
     override fun startDTD(name: String?, publicId: String?, systemId: String?) {
-        throw IllegalArgumentException("DOCX содержит недопустимое объявление DTD. Пересохраните документ в редакторе.")
+        throw VocabularyProblem(R.string.error_docx_dtd)
     }
 
     override fun resolveEntity(publicId: String?, systemId: String?): InputSource =
-        throw IllegalArgumentException("DOCX с внешними XML-ссылками не поддерживается. Пересохраните документ.")
+        throw VocabularyProblem(R.string.error_docx_external)
 
     override fun startElement(uri: String, local: String, qName: String, attrs: Attributes) {
         if (!wordNamespace(uri)) return

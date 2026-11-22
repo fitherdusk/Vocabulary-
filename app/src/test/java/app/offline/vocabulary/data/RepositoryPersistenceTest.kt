@@ -45,6 +45,67 @@ class RepositoryPersistenceTest {
         out.toByteArray()
     }
 
+    @Test fun milestonesUsePastGradedDaysAndOnlyTheFirstCompletionAtEachThreshold() {
+        var day = java.time.LocalDate.of(2025, 2, 18)
+        fun now() = day.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        repo.close()
+        repo = VocabularyRepository(context, dbName, ::now)
+        repo.importDictionary("Original title", entries.take(1))
+        fun finish(): Long {
+            val card = requireNotNull(repo.startSession())
+            assertNull(repo.milestoneForCompletion(card.id))
+            repo.rate(card.id, card.index, Rating.KNOWN)
+            return card.id
+        }
+        for (length in 1..20) {
+            val first = finish()
+            if (length == 1) repo.saveSettings(StudySettings(mode = StudyMode.REVIEW))
+            assertEquals(length, repo.snapshot().stats.streak)
+            assertEquals(length.takeIf { it in listOf(3, 7, 14, 20) }, repo.milestoneForCompletion(first))
+            if (length == 20) {
+                val bytes = backup()
+                repo.close()
+                repo = VocabularyRepository(context, dbName, ::now)
+                repo.restoreBackup(bytes.inputStream())
+                assertEquals(20, repo.milestoneForCompletion(first))
+            }
+            assertNull(repo.milestoneForCompletion(finish()))
+            day = day.plusDays(1)
+        }
+        day = day.plusDays(1)
+        assertNull(repo.milestoneForCompletion(finish()))
+        assertEquals(1, repo.snapshot().stats.streak)
+        day = day.plusDays(1)
+        assertNull(repo.milestoneForCompletion(finish()))
+        day = day.plusDays(1)
+        assertEquals(3, repo.milestoneForCompletion(finish()))
+    }
+
+    @Test fun anOpenOrAbandonedSessionCountsOnlyDaysWithAnAnswer() {
+        var date = java.time.LocalDate.of(2025, 12, 31)
+        repo.close()
+        repo = VocabularyRepository(context, dbName) {
+            date.atTime(23, 30).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }
+        repo.importDictionary("Three entries", entries)
+        val opened = requireNotNull(repo.startSession())
+        assertEquals(0, repo.snapshot().stats.streak)
+        repo.rate(opened.id, opened.index, Rating.AGAIN)
+        repo.abandonSession(opened.id)
+        assertEquals(1, repo.snapshot().stats.streak)
+        date = date.plusDays(1)
+        val next = requireNotNull(repo.startSession())
+        var card = requireNotNull(repo.rate(next.id, next.index, Rating.KNOWN))
+        assertEquals(2, repo.snapshot().stats.streak)
+        assertNull(repo.milestoneForCompletion(next.id))
+        date = date.plusDays(1)
+        while (true) {
+            card = repo.rate(card.id, card.index, Rating.KNOWN) ?: break
+        }
+        assertEquals(3, repo.snapshot().stats.streak)
+        assertEquals(3, repo.milestoneForCompletion(next.id))
+    }
+
     @Test fun dictionaryMasteryReflectsPartialLearningLapsesAndReset() {
         val dictionary = repo.importDictionary("Одно слово", entries.take(1))
         fun answer(rating: Rating) {

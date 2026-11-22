@@ -8,6 +8,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import app.offline.vocabulary.R
+import app.offline.vocabulary.VocabularyProblem
 import org.junit.Test
 
 class ParserTest {
@@ -124,16 +126,16 @@ class ParserTest {
 
     @Test fun oversizedStreamGetsReadableError() {
         val stream = ImportMemory().bounded(ByteArray(4).inputStream(), limit = 3)
-        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+        assertEquals(R.string.error_file_size, assertThrows(VocabularyProblem::class.java) {
             stream.read(ByteArray(4))
-        }.message.orEmpty().contains("памяти"))
+        }.resource)
     }
 
     @Test fun docxRejectsDoctypeBeforeExpandingAnyEntities() {
         val xml = """<!DOCTYPE w:document [<!ENTITY a "text">]><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>&a;</w:t></w:r></w:p></w:document>"""
-        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+        assertEquals(R.string.error_docx_dtd, assertThrows(VocabularyProblem::class.java) {
             DictionaryParser.parse("d.docx", zipXml(xml).inputStream())
-        }.message.orEmpty().contains("DTD"))
+        }.resource)
     }
 
     @Test fun docxReadsRunFragmentsWithoutInsertingSpacesAndPreservesCellBoundaries() {
@@ -151,12 +153,13 @@ class ParserTest {
         for ((file, content) in listOf("data.txt" to " \n", "data.csv" to "word,translation\na,\"не закрыто", "bad.docx" to "invalid", "data.exe" to "word")) {
             assertThrows(file, IllegalArgumentException::class.java) { parse(file, content) }
         }
-        val err = assertThrows(IllegalArgumentException::class.java) { parse("test.jsonl", "{\"word\":\"x\"}\n{") }
-        assertTrue(err.message.orEmpty().contains("2"))
+        val err = assertThrows(VocabularyProblem::class.java) { parse("test.jsonl", "{\"word\":\"x\"}\n{") }
+        assertEquals(R.string.error_json_line, err.resource)
+        assertEquals(2, err.arguments.single())
         val invalidText = byteArrayOf(0xC0.toByte(), 0xC0.toByte())
-        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+        assertEquals(R.string.error_utf8, assertThrows(VocabularyProblem::class.java) {
             DictionaryParser.parse("test.txt", invalidText.inputStream())
-        }.message.orEmpty().contains("UTF-8"))
+        }.resource)
     }
 
     private fun cell(text: String) = "<w:tc><w:p><w:r><w:t>$text</w:t></w:r></w:p></w:tc>"
